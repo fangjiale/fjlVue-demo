@@ -1,0 +1,143 @@
+<!DOCTYPE>
+<html>
+  <head>
+    <title>fjlVue</title>
+  </head>
+  <body>
+    <div id="app">
+      <input type="text"  v-model="number">
+      <button type="button" v-click="increment">点击加1</button>
+      <p v-bind="number"></p>
+    </div>
+  </body>
+</html>
+
+<script>
+  class fjlVue{
+    constructor(options) {
+      this.$data = options.data;
+      this.$methods = options.methods;
+      this.$el = document.querySelector(options.el);
+      this._init();
+    }
+
+    _init() {
+      this._observer(this.$data);
+      this._compile(this.$el);
+    }
+
+    _observer(data) {
+      const _this = this;
+      for (let key in data) {
+        if (data.hasOwnProperty(key)) {
+          let value = data[key];
+          if (typeof value === 'object') {
+            this._observer(value);
+          }
+          const dep = new Dep();
+          Object.defineProperty(this.$data, key, {
+            enumerable: true,
+            configurable: true,
+            get: function () {
+              console.log('get:', value);
+              if (Dep.target) {
+                dep.addSub(Dep.target);
+              }
+              return value;
+            },
+            set: function (newVal) {
+              console.log('set:', newVal);
+              if (newVal !== value) {
+                value = newVal;
+                dep.notify();
+                console.log('dep:', dep);
+              }
+            }
+          });
+        }
+      }
+    }
+
+    _compile(node) {
+      const _this = this;
+      const nodes = node.children;
+      for (let i=0; i<nodes.length; i++) {
+        const node = nodes[i];
+        if (node.hasAttribute('v-model')) {
+          const keyVal = node.getAttribute('v-model');
+          new Watcher({
+            node,
+            _this,
+            attrName: 'value',
+            valueName: keyVal,
+          });
+          node.addEventListener('input', function(e) {
+            _this.$data[keyVal] = e.target.value;
+          })
+        }
+
+        if (node.hasAttribute('v-click')) {
+          const keyVal = nodes[i].getAttribute('v-click');
+          node.onclick = _this.$methods[keyVal].bind(_this.$data);
+        }
+
+        if (node.hasAttribute('v-bind')) {
+          const keyVal = node.getAttribute('v-bind');
+          new Watcher({
+            node,
+            _this,
+            attrName: 'innerHTML',
+            valueName: keyVal,
+          })
+        }
+      }
+    }
+  }
+
+  class Dep{
+    constructor() {
+      this.subs = [];
+    }
+
+    notify() {
+      this.subs.forEach((watcher) => {
+        watcher._update();
+      })
+    }
+
+    addSub(watcher) {
+      this.subs.push(watcher);
+    }
+  }
+
+  Dep.target = null;
+
+  class Watcher{
+    constructor(options) {
+      this.$attrName = options.attrName;
+      this.$node = options.node;
+      this.vm = options._this;
+      this.$valueName = options.valueName;
+      Dep.target = this;
+      this.vm.$data[this.$valueName];
+      Dep.target = null;
+      this._update();
+    }
+
+    _update() {
+      this.$node[this.$attrName] = this.vm.$data[this.$valueName];
+    }
+  }
+
+  const app = new fjlVue({
+    el:'#app',
+    data: {
+      number: 0,
+    },
+    methods: {
+      increment: function() {
+        this.number ++;
+      },
+    }
+  })
+</script>

@@ -13,76 +13,111 @@
 </html>
 
 <script>
-  class fjlVue{
-    constructor(options) {
-      this.$data = options.data;
-      this.$methods = options.methods;
-      this.$el = document.querySelector(options.el);
-      this._init();
+  /**
+   * 不考虑数组的监听
+   * 不考虑vdom；不考虑render方法
+   * 不考虑特殊情况的一些处理
+   */
+  class Vue {
+    constructor (options) {
+      this.$data = options.data
+      this.$methods = options.methods
+      this.$el = document.querySelector(options.el)
+      this._init()
     }
 
-    _init() {
-      this._observer(this.$data);
-      this._compile(this.$el);
+    _init () {
+      this._observer(this.$data)
+      this._compile(this.$el)
     }
 
-    _observer(data) {
-      const _this = this;
+    _observer (data) { //
+      if (data === null || typeof data !== 'object') {
+        return
+      }
+      const _this = this
+
+      /**
+       * 方法1 Object.defineProperty的实现
+       */
+      // const dep = new Dep()
+      // const handler = {
+      //   get (target, key, receiver) {
+      //     if (Dep.target) {
+      //       console.warn('add dep key:', key)
+      //       console.log('dep:', dep)
+      //       dep.addSub(Dep.target)
+      //     }
+      //     return Reflect.get(target, key, receiver)
+      //   },
+      //   set (target, key, value) {
+      //     if (target[key] !== value) {
+      //       Reflect.set(target, key, value)
+      //       dep.notify()
+      //       console.warn('notify dep key:', key, value)
+      //       // console.log('dep:', dep)
+      //     }
+      //   }
+      // };
+      // this.$data = new Proxy(data, handler)
+
+      /**
+       * 方法2 Object.defineProperty的实现
+       */
       for (let key in data) {
-        if (data.hasOwnProperty(key)) {
-          let value = data[key];
-          if (typeof value === 'object') {
-            this._observer(value);
-          }
-          const dep = new Dep();
-          Object.defineProperty(this.$data, key, {
-            enumerable: true,
-            configurable: true,
-            get: function () {
-              console.log('get:', value);
-              if (Dep.target) {
-                dep.addSub(Dep.target);
-              }
-              return value;
-            },
-            set: function (newVal) {
-              console.log('set:', newVal);
-              if (newVal !== value) {
-                value = newVal;
-                dep.notify();
-                console.log('dep:', dep);
-              }
-            }
-          });
+        let value = data[key] // 
+        if (typeof value === 'object') {
+          this._observer(value) // 递归监听
         }
+        const dep = new Dep() // watcher的收集器实例，每个被监听的数据都会有
+        Object.defineProperty(data, key, {
+          enumerable: true,
+          configurable: true,
+          get: function () {
+            if (Dep.target) {
+              console.warn('add dep key:', key)
+              console.log('dep:', dep)
+              dep.addSub(Dep.target)
+            }
+            return value
+          },
+          set: function (newVal) {
+            if (newVal !== value) {
+              value = newVal
+              dep.notify()
+              console.warn('notify dep key:', key, value)
+              // console.log('dep:', dep)
+            }
+          }
+        })
       }
     }
 
-    _compile(node) {
-      const _this = this;
-      const nodes = node.children;
+    _compile (node) {
+      const _this = this
+      const nodes = node.children
       for (let i=0; i<nodes.length; i++) {
-        const node = nodes[i];
+        const node = nodes[i]
         if (node.hasAttribute('v-model')) {
-          const keyVal = node.getAttribute('v-model');
+          const keyVal = node.getAttribute('v-model')
           new Watcher({
             node,
             _this,
             attrName: 'value',
             valueName: keyVal,
-          });
+          })
           node.addEventListener('input', function(e) {
-            _this.$data[keyVal] = e.target.value;
+            valByPath(_this.$data, keyVal, e.target.value)
           })
         }
 
         if (node.hasAttribute('v-click')) {
-          const keyVal = nodes[i].getAttribute('v-click');
-          node.onclick = _this.$methods[keyVal].bind(_this.$data);
+          const keyVal = nodes[i].getAttribute('v-click')
+          node.onclick = _this.$methods[keyVal].bind(_this.$data)
         }
 
         if (node.hasAttribute('v-bind')) {
-          const keyVal = node.getAttribute('v-bind');
+          const keyVal = node.getAttribute('v-bind')
           new Watcher({
             node,
             _this,
@@ -94,50 +129,75 @@
     }
   }
 
-  class Dep{
-    constructor() {
-      this.subs = [];
+  class Dep {
+    constructor () {
+      this.subs = []
     }
 
-    notify() {
+    notify () {
       this.subs.forEach((watcher) => {
-        watcher._update();
+        watcher._update()
       })
     }
 
-    addSub(watcher) {
-      this.subs.push(watcher);
+    addSub (watcher) {
+      this.subs.push(watcher)
     }
   }
 
-  Dep.target = null;
+  Dep.target = null
 
-  class Watcher{
-    constructor(options) {
-      this.$attrName = options.attrName;
-      this.$node = options.node;
-      this.vm = options._this;
-      this.$valueName = options.valueName;
-      Dep.target = this;
-      this.vm.$data[this.$valueName];
-      Dep.target = null;
-      this._update();
+  class Watcher {
+    constructor (options) {
+      this.$attrName = options.attrName
+      this.$node = options.node
+      this.vm = options._this //
+      this.$valueName = options.valueName
+      Dep.target = this
+      valByPath(this.vm.$data, this.$valueName)
+      Dep.target = null
+      this._update()
     }
 
-    _update() {
-      this.$node[this.$attrName] = this.vm.$data[this.$valueName];
+    _update () {
+      this.$node[this.$attrName] = valByPath(this.vm.$data, this.$valueName)
     }
   }
 
-  const app = new fjlVue({
+  /**
+ * 
+ */
+  const bailRE = /[^\w.$]/
+
+  function valByPath (obj, path, val) {
+    if (bailRE.test(path)) {
+      return
+    }
+    const segments = path.split('.')
+    for (let i = 0; i < segments.length; i++) {
+      if (!obj) return
+      if (i === segments.length - 1 && val !== undefined) {
+        obj[segments[i]] = val
+        return
+      }
+      obj = obj[segments[i]]
+    }
+    if (val === undefined) {
+      return obj
+    }
+  }
+
+
+  const app = new Vue({
     el:'#app',
     data: {
       number: 0,
     },
     methods: {
       increment: function() {
-        this.number ++;
+        this.number ++
       },
     }
   })
+
 </script>

@@ -1,0 +1,53 @@
+<html>
+    <body>
+      <input id="input" />
+      <p id="p" ></p>
+    </body>
+</html>
+<script>
+  /**
+   * 这里还是直接去操作节点的
+   * 在set里面手动去触发 需要更新的函数
+   * 手动绑input事件
+   * def函数 第三个参数 存在的作用
+  */
+  const inputEle = document.getElementById('input');
+  const pEle = document.getElementById('p');
+  const obj = {
+    te: 'hello'
+  };
+
+  // data  = {
+
+  // }
+  
+  def(obj, 'te', obj.te)
+
+  inputEle.oninput = function(e) {
+    obj.te = e.target.value;
+  }
+
+  function pTextChange() {
+    pEle.innerText = obj.te;
+  }
+
+  function def (obj, key, value) {
+    Object.defineProperty(obj, 'te', {
+      get: function() {
+        return value; // return obj.key 
+      },
+      set: function(val) {
+        if (val !== value) {
+          obj.te = val;
+          inputEle.value = val;
+          pTextChange();
+        }
+      },
+    });
+  }
+
+  // obj.te = 999
+
+  // oninput  ->  obj.te -> set -> ptextchange
+
+</script>
